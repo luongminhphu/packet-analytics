@@ -38,6 +38,25 @@ def available_backends() -> list[str]:
     return out
 
 
+def list_interfaces_detailed() -> list[dict]:
+    """[{id, label}] — label thân thiện hơn trên Windows (scapy)."""
+    try:
+        from scapy.all import conf, get_if_list
+        out = []
+        for n in get_if_list():
+            label = n
+            try:
+                d = conf.ifaces.dev_from_networkname(n)
+                desc, ip = getattr(d, "description", ""), getattr(d, "ip", "")
+                label = " — ".join(x for x in (getattr(d, "name", n), desc, ip) if x and x != "0.0.0.0")
+            except Exception:
+                pass
+            out.append({"id": n, "label": label or n})
+        return out
+    except Exception:
+        return [{"id": n, "label": n} for n in list_interfaces()]
+
+
 def list_interfaces() -> list[str]:
     try:
         from scapy.all import get_if_list

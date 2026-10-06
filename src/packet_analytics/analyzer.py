@@ -57,6 +57,9 @@ class LatencyAnalyzer:
         self.on_first = on_first
         self._ref_clock = _clock_secs(cfg.reference_clock)
         self.total = 0
+        self._sec: int | None = None
+        self._date = ""
+        self._midnight_ns = 0
 
     def new_stream(self) -> None:
         """Bắt đầu nguồn mới (file/phiên capture khác): reset trạng thái ghép TCP."""
@@ -72,8 +75,13 @@ class LatencyAnalyzer:
     def feed(self, p: Packet, source: str = "") -> None:
         cfg = self.cfg
         self.total += 1
-        dt = datetime.fromtimestamp(p.ts_ns // 1000 / 1e6, self.tz)
-        date = dt.strftime("%Y-%m-%d")
+        sec = p.ts_ns // NS
+        if sec != self._sec:  # cache: chỉ tính lại ngày/nửa đêm khi sang giây mới
+            self._sec = sec
+            dt = datetime.fromtimestamp(sec, self.tz)
+            self._date = dt.strftime("%Y-%m-%d")
+            self._midnight_ns = int(datetime(dt.year, dt.month, dt.day, tzinfo=self.tz).timestamp()) * NS
+        date, midnight_ns = self._date, self._midnight_ns
         day = self.days.setdefault(date, DayResult(date))
         if source:
             day.files.add(source)
@@ -84,7 +92,6 @@ class LatencyAnalyzer:
         if not msgs:
             return
         day.matched += 1
-        midnight_ns = int(datetime(dt.year, dt.month, dt.day, tzinfo=self.tz).timestamp()) * NS
         for m in msgs:
             ref = None
             if cfg.latency_mode == "clock":

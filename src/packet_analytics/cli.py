@@ -113,7 +113,7 @@ def cmd_interfaces(a) -> int:
 
 
 def cmd_serve(a) -> int:
-    from .webapp import serve
+    from .web.server import serve
     serve(load_config(a.config), a.host, a.port, a.data_dir)
     return 0
 

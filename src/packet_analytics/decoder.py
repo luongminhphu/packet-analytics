@@ -24,6 +24,7 @@ class Message:
 
 
 _TPL = re.compile(r"\{(\d+)\}")
+_T35 = re.compile(rb"\x0135=([^\x01]+)\x01")
 
 
 class Decoder:
@@ -31,6 +32,9 @@ class Decoder:
         self.rules = cfg.get("rules", [])
         self.ts_tag = str(cfg.get("exchange_ts_tag", "52"))
         self.tcp = TcpReassembler()
+        # Nếu mọi rule đều ràng buộc tag 35, bỏ qua sớm message không liên quan (nhanh hơn nhiều)
+        want = {str(r.get("match", {}).get("35")) for r in self.rules if "35" in r.get("match", {})}
+        self.want = want if self.rules and len(want) and all("35" in r.get("match", {}) for r in self.rules) else None
 
     @staticmethod
     def _flow_ok(r: dict, p) -> bool:
@@ -55,6 +59,10 @@ class Decoder:
             raws, _ = split_messages(p.payload)
         out = []
         for raw in raws:
+            if self.want is not None:
+                m = _T35.search(raw)
+                if not m or m.group(1).decode("ascii", "replace") not in self.want:
+                    continue
             tags = parse_tags(raw)
             key = self._key(tags, p)
             if key:

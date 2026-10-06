@@ -35,6 +35,13 @@ sudo packet-analytics capture -i eth0 -c config.example.toml --start-at 08:58 --
 Lưu ý độ chính xác: capture bằng phần mềm có sai số vài chục µs trở lên và có thể rớt gói khi tải cao. Với đo đạc đua lệnh nghiêm túc,
 nên capture bằng NIC/switch hỗ trợ hardware timestamp (hoặc SPAN/TAP + dumpcap) rồi **import** file vào công cụ này.
 
+## Giao diện web
+`packet-analytics serve -c config.example.toml` → http://127.0.0.1:8080
+- **Import file**: kéo thả (có thanh tiến trình) hoặc nhập đường dẫn; **Capture realtime**: chọn interface/backend, xem số frame và thời gian chạy, file pcapng được lưu trong `data/`.
+- **Latency Heatmap**: tô màu theo mức trễ (bật/tắt), ô sớm nhất của nhóm `highlight` in đậm đỏ, bấm vào dòng ngày để xem **thứ tự tới nơi** + gap; cột **Noted** sửa trực tiếp (lưu ở `data/notes.json`); Export CSV/Excel.
+- **Live feed**: message đầu tiên của từng loại theo thời gian thực. Hỗ trợ dark mode, dùng được bằng bàn phím.
+- Mã giao diện nằm ở `src/packet_analytics/web/static/` (HTML/CSS/JS thuần, không phụ thuộc thư viện ngoài).
+
 ## Cách đo (khớp feed Sở trong file mẫu)
 - Feed là **FIX 4.4**: market data qua UDP multicast (`35=MM`, `M1`, `X`, `ME`...) và phiên TCP gateway (`35=K08`, `K04`, `D`...).
 - Message FIX được tách theo `8=FIX ... 10=xxx<SOH>`; UDP có thể chứa nhiều message/datagram, TCP được **ghép lại theo luồng**

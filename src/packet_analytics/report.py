@@ -99,5 +99,15 @@ def table_data(days: list[DayResult], cfg: Config) -> dict:
             "best": _best(d, cfg),
             "note": cfg.notes.get(d.date, ""),
             "packets": d.packets,
+            "race": _race_detail(d),
         })
     return {"columns": cols, "labels": {k: cfg.labels.get(k, f"First {k}") for k in cols}, "rows": rows}
+
+
+def _race_detail(day: DayResult) -> list[dict]:
+    items = sorted(day.first.values(), key=lambda a: a.ts_ns)
+    t0 = items[0].ts_ns if items else 0
+    return [{"key": a.key, "gap_ms": round((a.ts_ns - t0) / 1e6, 3),
+             "delay_ms": None if a.delay_ms is None else round(a.delay_ms, 2),
+             "flow": f"{a.src}:{a.sport} \u2192 {a.dst}:{a.dport}", "packet_no": a.packet_no, "count": a.count}
+            for a in items]

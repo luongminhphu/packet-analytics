@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Packet Analytics — Latency Heatmap</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true">◧</span><div><h1>Packet Analytics</h1>
+    <p>First-arrival latency đầu ngày giao dịch</p></div></div>
+  <div class="chips" id="chips"></div>
+  <div id="pill" class="pill idle" role="status" aria-live="polite">Sẵn sàng</div>
+</header>
+
+<main>
+  <section class="card" aria-labelledby="h-src">
+    <h2 id="h-src">Nguồn dữ liệu</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-import" aria-selected="true" aria-controls="pane-import">Import file</button>
+      <button role="tab" id="tab-capture" aria-selected="false" aria-controls="pane-capture">Capture realtime</button>
+    </div>
+
+    <div id="pane-import" role="tabpanel">
+      <div id="drop" class="drop" tabindex="0" role="button" aria-label="Chọn hoặc kéo thả file pcap">
+        <strong>Kéo thả file .pcap / .pcapng vào đây</strong><span>hoặc bấm để chọn file</span>
+        <input type="file" id="file" accept=".pcap,.pcapng,.cap" hidden>
+      </div>
+      <div class="row gap">
+        <input type="text" id="path" class="grow" placeholder="Hoặc đường dẫn file trên máy chạy app, ví dụ D:\captures\Capture_20260917.pcapng">
+        <button id="btn-path">Đọc đường dẫn</button>
+      </div>
+      <div id="progress" class="progress" hidden><div class="bar" id="bar"></div><span id="ptext"></span></div>
+    </div>
+
+    <div id="pane-capture" role="tabpanel" hidden>
+      <div class="grid4">
+        <label>Interface<select id="iface"></select></label>
+        <label>Backend<select id="backend"></select></label>
+        <label class="span2">BPF filter (chỉ scapy)<input type="text" id="bpf" placeholder="vd: udp and dst net 239.0.0.0/8"></label>
+      </div>
+      <div class="row gap">
+        <button class="primary" id="btn-start">● Bắt đầu capture</button>
+        <button class="danger" id="btn-stop">■ Dừng</button>
+        <span class="muted" id="cap-info"></span>
+      </div>
+      <p class="hint">Capture phần mềm có sai số ≥ vài chục µs. Với đo đạc nghiêm túc hãy dùng NIC/TAP có hardware timestamp rồi import file.</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="h-heat">
+    <div class="row between wrap">
+      <div><h2 id="h-heat">Latency Heatmap</h2><p class="muted" id="heat-sub">First-arrival delay (ms)</p></div>
+      <div class="row gap wrap">
+        <label class="check"><input type="checkbox" id="scale" checked> Tô màu theo mức trễ</label>
+        <button id="btn-csv">Export CSV</button>
+        <button id="btn-xlsx">Export Excel</button>
+        <button id="btn-reset">Xoá kết quả</button>
+      </div>
+    </div>
+    <div class="scroll"><table id="table"></table></div>
+    <div id="empty" class="empty" hidden>Chưa có dữ liệu — import file hoặc bắt đầu capture.</div>
+  </section>
+
+  <div class="two">
+    <section class="card" aria-labelledby="h-race">
+      <h2 id="h-race">Thứ tự tới nơi</h2>
+      <p class="muted" id="race-sub">Bấm vào một dòng ngày trong bảng để xem chi tiết.</p>
+      <div id="race"></div>
+    </section>
+    <section class="card" aria-labelledby="h-feed">
+      <h2 id="h-feed">Live feed — message đầu tiên</h2>
+      <div class="scroll feed"><table id="feed"></table></div>
+    </section>
+  </div>
+</main>
+<div id="toasts" aria-live="assertive"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
