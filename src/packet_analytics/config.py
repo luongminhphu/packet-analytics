@@ -21,11 +21,12 @@ class Config:
     latency_mode: str = "clock"           # clock | exchange_ts | first_packet
     reference_clock: str = "09:00:00"
     exchange_ts_format: str = "%H%M%S%f"
+    after_reference_only: bool = True     # clock mode: bỏ message tới trước reference_clock
     # report
     columns: list[str] = field(default_factory=list)
     highlight: list[str] = field(default_factory=list)
     labels: dict[str, str] = field(default_factory=dict)
-    race_day_note: str = "No race day"
+    notes: dict[str, str] = field(default_factory=dict)   # ngày -> ghi chú (cột Noted)
 
 
 def load_config(path: str | Path | None) -> Config:
@@ -44,8 +45,9 @@ def load_config(path: str | Path | None) -> Config:
         latency_mode=lat.get("mode", "clock"),
         reference_clock=lat.get("reference_clock", "09:00:00"),
         exchange_ts_format=lat.get("exchange_ts_format", "%H%M%S%f"),
+        after_reference_only=lat.get("after_reference_only", True),
         columns=rep.get("columns", []),
         highlight=rep.get("highlight", []),
         labels=rep.get("labels", {}),
-        race_day_note=rep.get("race_day_note", "No race day"),
+        notes=rep.get("notes", {}),
     )

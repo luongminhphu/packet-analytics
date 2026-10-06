@@ -1,30 +1,53 @@
-# Cấu hình mẫu — chỉnh theo format feed thực tế của Sở.
+# Cấu hình khớp capture mẫu Capture_20260917_0858.pcapng (feed FIX 4.4 của Sở).
 
 [capture]
-timezone_offset_hours = 7          # múi giờ hiển thị / tách ngày (VN = +7)
-protocol = "udp"                   # udp | tcp | any
-dst_ip = []                        # vd ["233.57.10.1"] (multicast feed); rỗng = tất cả
-dst_port = []
+timezone_offset_hours = 7          # VN = +7 (tag 52 trong FIX là UTC, capture hiển thị giờ VN)
+protocol = "any"                   # udp | tcp | any
 
 [decoder]
-mode = "regex"                     # regex | fixed
-# Ví dụ giả định: payload có đoạn "|T=M1|" ; sửa theo format thật.
-# FIX-like: pattern = '35=(?P<type>[A-Za-z0-9]+)\x01'
-pattern = 'T=(?P<type>[A-Z0-9]+)\|(?:S=(?P<sub>[A-Z0-9]+)\|)?(?:TS=(?P<ts>\d+)\|)?'
-key = "{type}"                     # có thể "{type}:{sub}" để tách K04:AD2 / K04:AA1 ...
-# mode = "fixed": type_offset = 4, type_length = 2, ts_offset = 10, ts_length = 9
+exchange_ts_tag = "52"             # SendingTime (UTC), dùng khi latency.mode = "exchange_ts"
+
+# Rule xét theo thứ tự, rule đầu tiên khớp quyết định cột. match = điều kiện theo tag FIX.
+[[decoder.rules]]                  # market data multicast
+match = { "35" = "MM" }
+key = "MM"
+[[decoder.rules]]
+match = { "35" = "M1" }
+key = "M1"
+[[decoder.rules]]                  # TCP: gateway trả về cho 172.24.11.160
+match = { "35" = "K08" }
+src_ip = "172.24.251.15"
+src_port = 30115
+key = "K08"
+[[decoder.rules]]
+match = { "35" = "K04" }
+src_ip = "172.24.251.15"
+src_port = 30115
+key = "K04:{20005}"                # tách theo tag 20005: AD2 / AA1 / AB1
+[[decoder.rules]]                  # lệnh đặt đầu tiên của 172.24.11.160 -> cổng 30111
+match = { "35" = "D" }
+src_ip = "172.24.11.160"
+dst_ip = "172.24.251.15"
+dst_port = 30111
+key = "D"
 
 [latency]
 mode = "clock"                     # clock | exchange_ts | first_packet
-reference_clock = "09:00:00"       # mốc tham chiếu khi mode = clock
-exchange_ts_format = "%H%M%S%f"    # khi mode = exchange_ts (giờ trong message, cùng múi giờ)
+reference_clock = "09:00:00"       # giờ mở cửa (giờ VN)
+after_reference_only = true        # bỏ message tới trước 09:00:00
 
 [report]
 columns   = ["M1", "MM", "K08", "K04:AD2", "K04:AA1", "K04:AB1", "D"]
-highlight = ["M1", "MM", "K08", "D"]   # nhóm xét "tới sớm nhất" (tô xanh)
-race_day_note = "No race day"
+highlight = ["M1", "MM", "K08", "D"]     # nhóm xét "tới sớm nhất" (tô xanh)
 
 [report.labels]
+"M1" = "First type M1"
+"MM" = "First type MM"
+"K08" = "First type K08"
 "K04:AD2" = "First K04 (AD2)"
 "K04:AA1" = "First K04 (AA1)"
 "K04:AB1" = "First K04 (AB1)"
+"D" = "First type D"
+
+[report.notes]                     # cột Noted theo ngày
+"2026-09-17" = "No race day"

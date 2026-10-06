@@ -11,6 +11,8 @@ dependencies = []
 
 [project.optional-dependencies]
 excel = ["openpyxl>=3.1"]
+live = ["scapy>=2.5"]   # capture realtime trên Windows (cần Npcap) hoặc dùng BPF filter
+all = ["openpyxl>=3.1", "scapy>=2.5"]
 
 [project.scripts]
 packet-analytics = "packet_analytics.cli:main"

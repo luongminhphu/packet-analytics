@@ -53,9 +53,9 @@ def write_csv(days: list[DayResult], cfg: Config, path: str | Path) -> None:
     cols = _columns(days, cfg)
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
-        w.writerow(["Date", *cols, "Packets", "Matched"])
+        w.writerow(["Date", *cols, "Noted"])
         for d in days:
-            w.writerow([d.date, *[_fmt(d, k).replace("-", "") for k in cols], d.packets, d.matched])
+            w.writerow([d.date, *[_fmt(d, k).replace("-", "") for k in cols], cfg.notes.get(d.date, "")])
 
 
 def write_xlsx(days: list[DayResult], cfg: Config, path: str | Path) -> None:
@@ -82,6 +82,22 @@ def write_xlsx(days: list[DayResult], cfg: Config, path: str | Path) -> None:
             cell.number_format = "0.00"
             if k == best:
                 cell.fill, cell.font = green, red
-        ws.cell(r, len(cols) + 2, "" if d.first else cfg.race_day_note)
+        ws.cell(r, len(cols) + 2, cfg.notes.get(d.date, ""))
     ws.column_dimensions["A"].width = 12
     wb.save(path)
+
+
+def table_data(days: list[DayResult], cfg: Config) -> dict:
+    """Dữ liệu heatmap dạng JSON cho web UI."""
+    cols = _columns(days, cfg)
+    rows = []
+    for d in days:
+        rows.append({
+            "date": d.date,
+            "cells": {k: (round(d.first[k].delay_ms, 2) if k in d.first and d.first[k].delay_ms is not None else None)
+                      for k in cols},
+            "best": _best(d, cfg),
+            "note": cfg.notes.get(d.date, ""),
+            "packets": d.packets,
+        })
+    return {"columns": cols, "labels": {k: cfg.labels.get(k, f"First {k}") for k in cols}, "rows": rows}

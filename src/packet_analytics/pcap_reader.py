@@ -22,6 +22,8 @@ class Packet:
     dport: int
     payload: bytes   # payload tầng ứng dụng
     frame_len: int
+    seq: int = 0     # TCP sequence number
+    flags: int = 0   # TCP flags
 
 
 # ---------------------------------------------------------------- L2/L3/L4
@@ -48,7 +50,7 @@ def _ip_from_frame(data: bytes, linktype: int) -> bytes | None:
     return None
 
 
-def _decode_frame(no: int, ts_ns: int, data: bytes, linktype: int, orig_len: int) -> Packet | None:
+def decode_frame(no: int, ts_ns: int, data: bytes, linktype: int, orig_len: int) -> Packet | None:
     ip = _ip_from_frame(data, linktype)
     if not ip or len(ip) < 20 or ip[0] >> 4 != 4:
         return None
@@ -64,9 +66,9 @@ def _decode_frame(no: int, ts_ns: int, data: bytes, linktype: int, orig_len: int
         payload = l4[8:ulen] if 8 <= ulen <= len(l4) else l4[8:]
         return Packet(no, ts_ns, "udp", src, dst, sport, dport, payload, orig_len)
     if proto == 6 and len(l4) >= 20:
-        sport, dport = struct.unpack("!HH", l4[:4])
+        sport, dport, seq = struct.unpack("!HHI", l4[:8])
         off = (l4[12] >> 4) * 4
-        return Packet(no, ts_ns, "tcp", src, dst, sport, dport, l4[off:], orig_len)
+        return Packet(no, ts_ns, "tcp", src, dst, sport, dport, l4[off:], orig_len, seq, l4[13])
     return None
 
 
@@ -95,7 +97,7 @@ def _read_pcap(f: BinaryIO, magic: bytes) -> Iterator[Packet]:
         if len(data) < incl:
             return
         no += 1
-        pkt = _decode_frame(no, sec * 1_000_000_000 + frac * mult, data, linktype, orig)
+        pkt = decode_frame(no, sec * 1_000_000_000 + frac * mult, data, linktype, orig)
         if pkt:
             yield pkt
 
@@ -142,7 +144,7 @@ def _read_pcapng(f: BinaryIO, first4: bytes) -> Iterator[Packet]:
                 continue
             linktype, tps = ifaces[iid]
             ts_ns = ((thi << 32) | tlo) * 1_000_000_000 // tps
-            pkt = _decode_frame(no, ts_ns, body[20:20 + cap], linktype, orig)
+            pkt = decode_frame(no, ts_ns, body[20:20 + cap], linktype, orig)
             if pkt:
                 yield pkt
 

@@ -1,41 +1,55 @@
 # packet-analytics
 
-Công cụ **chỉ đọc** (offline) để phân tích file capture (`.pcap` / `.pcapng`) đầu ngày giao dịch:
-giải mã message type do Sở gửi (M1, MM, K08, K04/AD2, AA1, AB1, D, ...) và đo **first-arrival delay** theo ngày × message type,
-phục vụ phân tích đua lệnh. Thuần Python stdlib (Excel export cần `openpyxl`).
+Công cụ **chỉ đọc / chỉ lắng nghe** (không gửi gì vào mạng, không can thiệp hệ thống giao dịch) để phân tích gói tin đầu ngày
+giao dịch: giải mã message FIX do Sở gửi (M1, MM, K08, K04/AD2·AA1·AB1, D, ...), đo **first-arrival delay** theo ngày × message type
+và dựng **Latency Heatmap** (CSV / Excel).
+
+Hai nguồn dữ liệu: **import file `.pcap/.pcapng`** hoặc **capture realtime trên cổng mạng** (đồng thời lưu pcapng để đối soát lại).
+
+Đã đối soát với capture mẫu `Capture_20260917_0858.pcapng`: kết quả khớp heatmap ngày 2026-09-17
+(M1 8.74 · MM 4.59 · K08 147.53 · K04 AD2 748.17 / AA1 750.99 / AB1 114.09 · D 881.53 ms).
 
 ## Cài đặt
 ```bash
-pip install -e .            # hoặc: pip install -e ".[excel]"
+pip install -e ".[all]"        # openpyxl (Excel) + scapy (capture Windows / BPF). Linux tối thiểu: không cần gói nào, Excel cần openpyxl
 ```
 
-## Quy trình dùng
-1. Capture đầu ngày bằng tcpdump/Wireshark/card capture (lưu ra pcap/pcapng, có hardware timestamp càng tốt).
-2. Xem thử gói tin & kiểm tra decoder:
-   ```bash
-   packet-analytics inspect 2026-09-28.pcap -c config.toml -n 30 --hex
-   ```
-3. Phân tích và xuất báo cáo:
-   ```bash
-   packet-analytics analyze 2026-09-2*.pcap -c config.toml --race --csv out/heatmap.csv --xlsx out/heatmap.xlsx
-   ```
+## Cách dùng
+```bash
+# Web UI (import file, capture realtime, heatmap, Export Excel) — mặc định chỉ lắng nghe 127.0.0.1
+packet-analytics serve -c config.example.toml --port 8080
 
-## Cấu hình (`config.example.toml`)
-- `[capture]`: lọc protocol / IP / port của feed Sở, múi giờ tách ngày.
-- `[decoder]`: cách lấy message type từ payload (`regex` với named group `type`/`sub`/`ts`, hoặc `fixed` theo offset).
-  **Phải chỉnh theo format thực tế của feed.** `key = "{type}:{sub}"` để tách các cột như K04 (AD2/AA1/AB1).
-- `[latency].mode`:
-  - `clock`: delay = giờ nhận − mốc `reference_clock` (vd 09:00:00).
-  - `exchange_ts`: delay = giờ nhận − timestamp trong message (cần group `ts`; yêu cầu đồng bộ giờ máy capture, PTP/NTP).
-  - `first_packet`: delay so với message đầu tiên trong ngày.
-- `[report]`: danh sách cột, nhóm `highlight` (ô nhỏ nhất tô xanh), nhãn cột.
+# CLI
+packet-analytics inspect Capture.pcapng -c config.example.toml -n 30 --hex --only-decoded
+packet-analytics analyze Capture_*.pcapng -c config.example.toml --race --csv out.csv --xlsx out.xlsx
+packet-analytics interfaces
+sudo packet-analytics capture -i eth0 -c config.example.toml --start-at 08:58 --stop-at 09:05 -o capture.pcapng --xlsx out.xlsx
+```
+
+### Capture realtime
+| Backend | Nền tảng | Ghi chú |
+|---|---|---|
+| `afpacket` | Linux | thuần stdlib, timestamp kernel `SO_TIMESTAMPNS` (ns), cần root / `CAP_NET_RAW`; lọc ở user-space |
+| `scapy` | Linux / Windows | `pip install scapy` (+ Npcap trên Windows), hỗ trợ `--bpf` |
+
+Lưu ý độ chính xác: capture bằng phần mềm có sai số vài chục µs trở lên và có thể rớt gói khi tải cao. Với đo đạc đua lệnh nghiêm túc,
+nên capture bằng NIC/switch hỗ trợ hardware timestamp (hoặc SPAN/TAP + dumpcap) rồi **import** file vào công cụ này.
+
+## Cách đo (khớp feed Sở trong file mẫu)
+- Feed là **FIX 4.4**: market data qua UDP multicast (`35=MM`, `M1`, `X`, `ME`...) và phiên TCP gateway (`35=K08`, `K04`, `D`...).
+- Message FIX được tách theo `8=FIX ... 10=xxx<SOH>`; UDP có thể chứa nhiều message/datagram, TCP được **ghép lại theo luồng**
+  (message bị cắt giữa các segment, retransmit). Thời điểm tới = timestamp của gói **hoàn tất** message.
+- `delay = thời điểm tới − 09:00:00 (giờ VN)`, chỉ tính message tới **từ** 09:00:00 (`after_reference_only`).
+- Cột `K04:AD2/AA1/AB1` tách theo tag `20005`. Mỗi cột được xác định bằng **rule** trong config (`[[decoder.rules]]`): điều kiện theo tag FIX
+  + giới hạn theo flow (IP/port), vd `D` chỉ tính lệnh từ `172.24.11.160 → 172.24.251.15:30111` (flow khác cùng gửi `35=D` sớm hơn, 294 ms, **không** nằm trong heatmap gốc).
+- Chế độ khác: `latency.mode = "exchange_ts"` (đo so với `SendingTime` tag 52, UTC, cần đồng bộ giờ) hoặc `"first_packet"`.
+- Nếu đổi IP/port gateway, sửa `[[decoder.rules]]` trong config.
 
 ## Kiểm thử
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
+PA_SAMPLE_PCAP=Capture_20260917_0858.pcapng PYTHONPATH=src python -m unittest discover -s tests -v   # đối soát file mẫu
 ```
 
-## Lưu ý vận hành
-- Công cụ chỉ đọc file capture, không tương tác hệ thống giao dịch.
-- Độ chính xác latency phụ thuộc nguồn timestamp của capture (NIC/hardware vs kernel) và đồng bộ đồng hồ.
-- Không commit file pcap/kết quả lên git (đã có trong `.gitignore`).
+## Bảo mật
+Web UI không có xác thực → chỉ bind `127.0.0.1` (mặc định). Không commit file pcap/kết quả (đã có trong `.gitignore`).
